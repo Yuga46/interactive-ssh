@@ -23,10 +23,14 @@ export class InteractiveSSH {
       }
     };
     this_obj.downloaded_files = [];
+    this_obj.onStreamText = (text = "") => {};
   }
   setStreamMode(mode = "default") {
     const this_obj = this;
     this_obj.stream_mode = mode;
+  }
+  setOnStreamText(func = () => {}) {
+    this.onStreamText = func;
   }
   connect(options) {
     const this_obj = this;
@@ -49,7 +53,7 @@ export class InteractiveSSH {
               })
               .on("data", (data) => {
                 let data_string = data.toString();
-                process.stderr.write(data_string);
+                this_obj.onStreamText(data_string);
                 this_obj.data_stream += data_string;
                 this_obj.onStream();
                 if (this_obj.isEndStream()) {
