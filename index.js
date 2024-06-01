@@ -2,6 +2,8 @@ import SFTP from "ssh2-sftp-client";
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
 import fs from "fs";
+import Sequelize from "sequelize";
+import { createTunnel } from "tunnel-ssh";
 
 export const __filename = fileURLToPath(import.meta.url);
 export const __dirname = dirname(__filename);
@@ -15,6 +17,7 @@ export class InteractiveSSH {
     this_obj.data_stream = "";
     this_obj.is_ready = false;
     this_obj.stream_mode = "default";
+    this_obj.ssh_options = {};
     this_obj.isEndStream = () => {
       if (this_obj.stream_mode == "mariadb") {
         return this_obj.data_stream.match(/mariadb.+>/gi);
@@ -31,6 +34,9 @@ export class InteractiveSSH {
   }
   setOnStreamText(func = () => {}) {
     this.onStreamText = func;
+  }
+  getSSHClient() {
+    return this.ssh;
   }
   connect(options) {
     const this_obj = this;
@@ -71,7 +77,8 @@ export class InteractiveSSH {
           this_obj.onClose();
         });
       // .connect(options);
-      this_obj.sftp.connect(options).catch((err2) => {
+      this_obj.ssh_options = options;
+      this_obj.sftp.connect(this_obj.ssh_options).catch((err2) => {
         reject(err2);
         this_obj.onClose();
       });
@@ -135,6 +142,9 @@ export class InteractiveSSH {
           _local_path == ""
             ? path.join(__dirname, "temp", filename)
             : path.join(__dirname, _local_path);
+        let localdir = path.dirname(local_path);
+        if (!fs.existsSync(localdir))
+          fs.mkdirSync(localdir, { recursive: true });
         await this_obj.sftp.fastGet(remote_path, local_path);
         this_obj.downloaded_files.push(local_path);
         return { result: true };
@@ -158,6 +168,22 @@ export class InteractiveSSH {
       }
     }
   }
+  async saveFile(dst_local_path, _local_path = "") {
+    const this_obj = this;
+    let dst_dir = path.dirname(dst_local_path);
+    let filename = path.basename(dst_local_path);
+    let local_path =
+      _local_path == ""
+        ? path.join(__dirname, "temp", filename)
+        : path.join(__dirname, _local_path);
+    if (fs.existsSync(local_path)) {
+      if (!fs.existsSync(dst_dir)) fs.mkdirSync(dst_dir, { recursive: true });
+      fs.copyFileSync(local_path, dst_local_path);
+      return { result: true };
+    } else {
+      return { result: false, msg: `${filename} doesn't exists` };
+    }
+  }
   close() {
     const this_obj = this;
     if (this_obj.is_ready) {
@@ -166,9 +192,51 @@ export class InteractiveSSH {
         if (fs.existsSync(local_path)) fs.unlinkSync(local_path);
       }
       this_obj.sftp.end();
+      if (this_obj.last_sequelize) this_obj.last_sequelize;
       return this_obj.ssh.end();
     } else {
       return true;
+    }
+  }
+
+  async createSequelizeMysql(sequelize_options) {
+    const this_obj = this;
+    try {
+      if (this_obj.last_sequelize) {
+        return this_obj.last_sequelize;
+      } else {
+        const mysql_host = sequelize_options.host || "localhost";
+        const mysql_port = sequelize_options.port || "3306";
+        const mysql_user = sequelize_options.user || "";
+        const mysql_pass = sequelize_options.password || "";
+        const mysql_dbname = sequelize_options.database || "";
+
+        const [server, client] = await createTunnel(
+          { autoClose: true },
+          null,
+          this_obj.ssh_options,
+          { dstAddr: "localhost", dstPort: mysql_port }
+        );
+
+        const local_port = server.address().port;
+
+        const sequelize = new Sequelize({
+          dialect: "mysql",
+          host: mysql_host,
+          port: local_port,
+          username: mysql_user,
+          password: mysql_pass,
+          database: mysql_dbname,
+        });
+
+        await sequelize.authenticate();
+        this_obj.last_sequelize = sequelize;
+        return sequelize;
+      }
+    } catch (e) {
+      console.error(e.message);
+      this_obj.last_sequelize = null;
+      return null;
     }
   }
 }

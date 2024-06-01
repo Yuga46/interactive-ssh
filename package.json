@@ -12,6 +12,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "ssh2-sftp-client": "^10.0.3"
+    "sequelize": "^6.37.3",
+    "ssh2-sftp-client": "^10.0.3",
+    "tunnel-ssh": "^5.1.2"
   }
 }
