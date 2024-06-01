@@ -194,6 +194,7 @@ export class InteractiveSSH {
     const this_obj = this;
     if (this_obj.is_ready) {
       this_obj.is_ready = false;
+      this_obj.clearCache();
       this_obj.sftp.end();
       if (this_obj.last_sequelize) this_obj.last_sequelize;
       return this_obj.ssh.end();
