@@ -184,13 +184,16 @@ export class InteractiveSSH {
       return { result: false, msg: `${filename} doesn't exists` };
     }
   }
+  clearCache() {
+    const this_obj = this;
+    for (let local_path of this_obj.downloaded_files) {
+      if (fs.existsSync(local_path)) fs.unlinkSync(local_path);
+    }
+  }
   close() {
     const this_obj = this;
     if (this_obj.is_ready) {
       this_obj.is_ready = false;
-      for (let local_path of this_obj.downloaded_files) {
-        if (fs.existsSync(local_path)) fs.unlinkSync(local_path);
-      }
       this_obj.sftp.end();
       if (this_obj.last_sequelize) this_obj.last_sequelize;
       return this_obj.ssh.end();
