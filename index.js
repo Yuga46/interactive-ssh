@@ -216,7 +216,7 @@ export class InteractiveSSH {
         const mysql_dbname = sequelize_options.database || "";
 
         const [server, client] = await createTunnel(
-          { autoClose: true },
+          { autoClose: false },
           null,
           this_obj.ssh_options,
           { dstAddr: "localhost", dstPort: mysql_port }
