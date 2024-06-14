@@ -215,14 +215,34 @@ export class InteractiveSSH {
         const mysql_pass = sequelize_options.password || "";
         const mysql_dbname = sequelize_options.database || "";
 
-        const [server, client] = await createTunnel(
+        let [server] = await createTunnel(
           { autoClose: false },
           null,
           this_obj.ssh_options,
           { dstAddr: "localhost", dstPort: mysql_port }
         );
 
+        const local_host = server.address().address;
         const local_port = server.address().port;
+
+        let retry_timeout = 5000;
+        server.on("connection", () => (retry_timeout = 5000));
+
+        server.on("close", async () => {
+          console.log(
+            `Retry Tunnel Mysql at ${Math.floor(
+              retry_timeout / 1000
+            )} Second...`
+          );
+          setTimeout(async () => {
+            [server] = await createTunnel(
+              { autoClose: false, host: local_host, port: local_port },
+              null,
+              this_obj.ssh_options,
+              { dstAddr: "localhost", dstPort: mysql_port }
+            );
+          }, retry_timeout);
+        });
 
         const sequelize = new Sequelize({
           dialect: "mysql",
